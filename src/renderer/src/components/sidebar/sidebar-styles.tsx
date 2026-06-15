@@ -37,7 +37,7 @@ export const sidebarStyles = {
       left: 0,
       top: 0,
       height: '100%',
-      width: '440px',
+      width: { base: '100%', md: '440px' },
       bg: 'gray.900',
       transform: isCollapsed
         ? 'translateX(calc(-100% + 24px))'
