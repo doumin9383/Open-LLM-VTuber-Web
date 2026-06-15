@@ -1,7 +1,7 @@
 /* eslint-disable no-shadow */
 // import { StrictMode } from 'react';
 import { Box, Flex, ChakraProvider, defaultSystem } from "@chakra-ui/react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 // import Canvas from './components/canvas/canvas'; // Likely unused now
 import Sidebar from "./components/sidebar/sidebar";
 import Footer from "./components/footer/footer";
@@ -36,16 +36,6 @@ function AppContent(): JSX.Element {
   const { mode } = useMode();
   const isElectron = window.api !== undefined;
   const live2dContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
     
   document.documentElement.style.overflow = 'hidden';

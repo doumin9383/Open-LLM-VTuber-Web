@@ -1,5 +1,5 @@
 /* eslint-disable react/require-default-props */
-import { Box, Button, Menu } from '@chakra-ui/react';
+import { Box, Button, Menu, Separator } from '@chakra-ui/react';
 import {
   FiSettings, FiClock, FiPlus, FiChevronLeft, FiUsers, FiLayers
 } from 'react-icons/fi';
@@ -9,6 +9,7 @@ import SettingUI from './setting/setting-ui';
 import ChatHistoryPanel from './chat-history-panel';
 import BottomTab from './bottom-tab';
 import HistoryDrawer from './history-drawer';
+import HomeAITuberPanel from '../homeaituber/HomeAITuberPanel';
 import { useSidebar } from '@/hooks/sidebar/use-sidebar';
 import GroupDrawer from './group-drawer';
 import { ModeType } from '@/context/mode-context';
@@ -128,6 +129,8 @@ const SidebarContent = memo(({
       />
     </Box>
     <ChatHistoryPanel />
+    <Separator borderColor="whiteAlpha.200" />
+    <HomeAITuberPanel />
     <BottomTab />
   </Box>
 ));
