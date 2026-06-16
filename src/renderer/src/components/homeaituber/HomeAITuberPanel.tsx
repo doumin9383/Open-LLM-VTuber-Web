@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { FiRadio } from 'react-icons/fi';
 import { useRadioWs, RadioSegment } from '@/hooks/homeaituber/use-radio-ws';
+import { useGraphics } from '@/context/graphics-context';
 
 const MODES = [
   { id: 'chat', label: '💬 Chat' },
@@ -71,6 +72,7 @@ function HomeAITuberPanel(): JSX.Element {
   } = useRadioWs('');
 
   const [mood, setMoodState] = useState('');
+  const { enabled: graphicsEnabled, toggle: toggleGraphics } = useGraphics();
 
   // Persist
   useEffect(() => {
@@ -101,6 +103,19 @@ function HomeAITuberPanel(): JSX.Element {
         <Text fontSize="xs" color="whiteAlpha.600">
           {connected ? 'Radio connected' : 'Radio disconnected'}
         </Text>
+      </Flex>
+
+      {/* Graphics toggle */}
+      <Flex align="center" justify="space-between" mb="3" px="1">
+        <Text fontSize="xs" color="whiteAlpha.500" fontWeight="medium">🖼️ Live2D</Text>
+        <Button
+          size="xs"
+          variant={graphicsEnabled ? 'solid' : 'outline'}
+          colorPalette={graphicsEnabled ? 'green' : 'gray'}
+          onClick={toggleGraphics}
+        >
+          {graphicsEnabled ? 'ON' : 'OFF'}
+        </Button>
       </Flex>
 
       {/* Mode */}

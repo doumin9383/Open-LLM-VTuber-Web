@@ -1,7 +1,7 @@
 /* eslint-disable no-shadow */
 // import { StrictMode } from 'react';
 import { Box, Flex, ChakraProvider, defaultSystem } from "@chakra-ui/react";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 // import Canvas from './components/canvas/canvas'; // Likely unused now
 import Sidebar from "./components/sidebar/sidebar";
 import Footer from "./components/footer/footer";
@@ -26,16 +26,24 @@ import { BrowserProvider } from "./context/browser-context";
 // eslint-disable-next-line import/no-extraneous-dependencies, import/newline-after-import
 import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
 import Background from "./components/canvas/background";
-import WebSocketStatus from "./components/canvas/ws-status";
+import WebSocketStatus from './components/canvas/ws-status';
 import Subtitle from "./components/canvas/subtitle";
 import { ModeProvider, useMode } from "./context/mode-context";
+import { GraphicsProvider, useGraphics } from "./context/graphics-context";
+import { useIsMobile } from "./hooks/utils/use-is-mobile";
+import MobileSidebarDrawer from "./components/mobile/MobileSidebarDrawer";
+import MobileFloatingControls from "./components/mobile/MobileFloatingControls";
+import { RadioSegmentToastProvider } from "./components/homeaituber/RadioSegmentToast";
 
 function AppContent(): JSX.Element {
   const [showSidebar, setShowSidebar] = useState(true);
   const [isFooterCollapsed, setIsFooterCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const { mode } = useMode();
   const isElectron = window.api !== undefined;
   const live2dContainerRef = useRef<HTMLDivElement>(null);
+  const { enabled: graphicsEnabled } = useGraphics();
+  const isMobile = useIsMobile();
 
     
   document.documentElement.style.overflow = 'hidden';
@@ -53,6 +61,7 @@ function AppContent(): JSX.Element {
     overflow: "hidden",
     transition: "all 0.3s ease-in-out", // Optional transition
     pointerEvents: "auto" as const,
+    visibility: graphicsEnabled ? ("visible" as const) : ("hidden" as const),
   };
 
   // Define styles specifically for the "window" mode, using responsive syntax
@@ -97,45 +106,118 @@ function AppContent(): JSX.Element {
       {/* Conditional Rendering of Window UI */}
       {mode === "window" && (
         <>
-          {isElectron && <TitleBar />}
-          {/* Apply styles by spreading */}
-          <Flex {...layoutStyles.appContainer}>
-            <Box
-              {...layoutStyles.sidebar}
-              {...(!showSidebar && { width: "24px" })}
-            >
-              <Sidebar
-                isCollapsed={!showSidebar}
-                onToggle={() => setShowSidebar(!showSidebar)}
-              />
-            </Box>
-            <Box {...layoutStyles.mainContent}>
-              <Background />
-              <Box position="absolute" top="20px" left="20px" zIndex={10}>
-                <WebSocketStatus />
-              </Box>
+          {isElectron && !isMobile && <TitleBar />}
+          
+          {/* Desktop: inline sidebar + mainContent layout */}
+          {!isMobile && (
+            <Flex {...layoutStyles.appContainer}>
               <Box
-                position="absolute"
-                bottom={isFooterCollapsed ? "39px" : "135px"}
-                left="50%"
-                transform="translateX(-50%)"
-                zIndex={10}
-                width="60%"
+                {...layoutStyles.sidebar}
+                {...(!showSidebar && { width: "24px" })}
               >
-                <Subtitle />
-              </Box>
-              <Box
-                {...layoutStyles.footer}
-                zIndex={10}
-                {...(isFooterCollapsed && layoutStyles.collapsedFooter)}
-              >
-                <Footer
-                  isCollapsed={isFooterCollapsed}
-                  onToggle={() => setIsFooterCollapsed(!isFooterCollapsed)}
+                <Sidebar
+                  isCollapsed={!showSidebar}
+                  onToggle={() => setShowSidebar(!showSidebar)}
                 />
               </Box>
-            </Box>
-          </Flex>
+              <Box {...layoutStyles.mainContent}>
+                <Background />
+                <Box position="absolute" top="20px" left="20px" zIndex={10}>
+                  <WebSocketStatus />
+                </Box>
+                <Box
+                  position="absolute"
+                  bottom={isFooterCollapsed ? "39px" : "135px"}
+                  left="50%"
+                  transform="translateX(-50%)"
+                  zIndex={10}
+                  width="60%"
+                >
+                  <Subtitle />
+                </Box>
+                <Box
+                  {...layoutStyles.footer}
+                  zIndex={10}
+                  {...(isFooterCollapsed && layoutStyles.collapsedFooter)}
+                >
+                  <Footer
+                    isCollapsed={isFooterCollapsed}
+                    onToggle={() => setIsFooterCollapsed(!isFooterCollapsed)}
+                  />
+                </Box>
+              </Box>
+            </Flex>
+          )}
+
+          {/* Mobile: overlay footer + floating controls + Drawer sidebar */}
+          {isMobile && (
+            <>
+              {/* Subtle overlay background */}
+              <Box
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+                zIndex={1}
+                pointerEvents="none"
+              >
+                {/* Footer at bottom as overlay */}
+                <Box
+                  position="absolute"
+                  bottom={0}
+                  left={0}
+                  right={0}
+                  zIndex={10}
+                  pointerEvents="auto"
+                >
+                  <Box
+                    {...layoutStyles.footer}
+                    {...(isFooterCollapsed && layoutStyles.collapsedFooter)}
+                  >
+                    <Footer
+                      isCollapsed={isFooterCollapsed}
+                      onToggle={() => setIsFooterCollapsed(!isFooterCollapsed)}
+                    />
+                  </Box>
+                </Box>
+
+                {/* WebSocket status indicator */}
+                <Box position="absolute" top="20px" left="20px" zIndex={10} pointerEvents="auto">
+                  <WebSocketStatus />
+                </Box>
+
+                {/* Subtitle */}
+                <Box
+                  position="absolute"
+                  bottom={isFooterCollapsed ? "125px" : "175px"}
+                  left="50%"
+                  transform="translateX(-50%)"
+                  zIndex={10}
+                  width="80%"
+                  pointerEvents="auto"
+                >
+                  <Subtitle />
+                </Box>
+              </Box>
+
+              {/* Floating action buttons */}
+              <MobileFloatingControls
+                onOpenChat={() => setMobileSidebarOpen(true)}
+                micOn={false}
+                onMicToggle={() => {}}
+              />
+
+              {/* Mobile sidebar as Drawer */}
+              <MobileSidebarDrawer
+                open={mobileSidebarOpen}
+                onClose={() => setMobileSidebarOpen(false)}
+              />
+            </>
+          )}
+
+          {/* Radio segment overlay notification (desktop only) */}
+          <RadioSegmentToastProvider />
         </>
       )}
 
@@ -172,10 +254,12 @@ function AppWithGlobalStyles(): JSX.Element {
                         <BgUrlProvider>
                           <GroupProvider>
                             <BrowserProvider>
-                              <WebSocketHandler>
-                                <Toaster />
-                                <AppContent />
-                              </WebSocketHandler>
+                              <GraphicsProvider>
+                                <WebSocketHandler>
+                                  <Toaster />
+                                  <AppContent />
+                                </WebSocketHandler>
+                              </GraphicsProvider>
                             </BrowserProvider>
                           </GroupProvider>
                         </BgUrlProvider>

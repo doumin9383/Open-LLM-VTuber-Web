@@ -9,7 +9,7 @@ export const layoutStyles = {
     overflow: 'hidden',
     position: 'relative',
     display: 'flex',
-    flexDirection: { base: 'column', md: 'row' },
+    flexDirection: { base: 'column', md: 'row' } as const,
     mt: isElectron ? '30px' : '0',
   },
   sidebar: {

@@ -1,6 +1,7 @@
 /**
  * Hook for HomeAITuber radio WebSocket connection.
  * Connects to /radio-ws endpoint and manages radio segment state.
+ * Features: exponential backoff reconnect (1s→30s cap), visibilitychange reconnect.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 
@@ -28,6 +29,7 @@ export interface RadioState {
 export function useRadioWs(baseUrl: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const backoffRef = useRef(1000);
   const [connected, setConnected] = useState(false);
   const [segments, setSegments] = useState<RadioSegment[]>([]);
   const [state, setState] = useState<RadioState>({
@@ -37,6 +39,12 @@ export function useRadioWs(baseUrl: string) {
   });
 
   const connect = useCallback(() => {
+    // Clear any pending reconnect
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = undefined;
+    }
+
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${proto}//${window.location.host}/radio-ws`;
 
@@ -46,6 +54,7 @@ export function useRadioWs(baseUrl: string) {
 
       ws.onopen = () => {
         setConnected(true);
+        backoffRef.current = 1000; // Reset backoff on successful connect
       };
 
       ws.onmessage = (event) => {
@@ -72,22 +81,44 @@ export function useRadioWs(baseUrl: string) {
 
       ws.onclose = () => {
         setConnected(false);
-        reconnectTimerRef.current = setTimeout(connect, 3000);
+        const delay = Math.min(backoffRef.current, 30000);
+        backoffRef.current = Math.min(backoffRef.current * 2, 30000);
+        reconnectTimerRef.current = setTimeout(connect, delay);
       };
 
       ws.onerror = () => {
         ws.close();
       };
     } catch (_) {
-      reconnectTimerRef.current = setTimeout(connect, 5000);
+      const delay = Math.min(backoffRef.current, 30000);
+      backoffRef.current = Math.min(backoffRef.current * 2, 30000);
+      reconnectTimerRef.current = setTimeout(connect, delay);
     }
   }, []);
 
   useEffect(() => {
     connect();
+
+    // visibilitychange: reconnect immediately when tab becomes visible
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      const isStale = !wsRef.current
+        || wsRef.current.readyState === WebSocket.CLOSED
+        || wsRef.current.readyState === WebSocket.CLOSING;
+      if (isStale) {
+        backoffRef.current = 1000; // Reset backoff so reconnect is immediate
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+        }
+        connect();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       clearTimeout(reconnectTimerRef.current);
       wsRef.current?.close();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [connect]);
 
