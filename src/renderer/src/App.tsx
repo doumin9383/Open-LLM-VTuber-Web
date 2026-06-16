@@ -32,7 +32,7 @@ import { ModeProvider, useMode } from "./context/mode-context";
 import { GraphicsProvider, useGraphics } from "./context/graphics-context";
 import MobileSidebarDrawer from "./components/mobile/MobileSidebarDrawer";
 import MobileFloatingControls from "./components/mobile/MobileFloatingControls";
-import { RadioSegmentToastProvider } from "./components/homeaituber/RadioSegmentToast";
+import { StreamingStatusProvider } from "./components/homeaituber/RadioSegmentToast";
 
 function AppContent(): JSX.Element {
   const [showSidebar, setShowSidebar] = useState(true);
@@ -215,8 +215,8 @@ function AppContent(): JSX.Element {
             onClose={() => setMobileSidebarOpen(false)}
           />
 
-          {/* Radio segment overlay notification */}
-          <RadioSegmentToastProvider />
+          {/* Streaming status indicator */}
+          <StreamingStatusProvider />
         </>
       )}
 
