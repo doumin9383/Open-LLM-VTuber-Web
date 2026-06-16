@@ -1,15 +1,15 @@
 /**
  * HomeAITuber Control Panel
- * Integrated into the sidebar — streaming controls, mood, language, fire button.
+ * Integrated into the sidebar — multi-agent streaming controls.
  *
- * Audio/Live2D now go through the main /client-ws (normal chat pipeline),
- * not through /radio-ws. This panel is purely a control interface.
+ * v2: Added topic list management, interval slider, agent status.
  */
+
 import {
-  Box, Button, Flex, Text, Badge, Separator,
+  Box, Button, Flex, Text, Badge, Separator, Input, Select, createListCollection,
 } from '@chakra-ui/react';
 import {
-  memo, useCallback, useState, useEffect,
+  memo, useCallback, useState, useEffect, useRef,
 } from 'react';
 import { FiRadio } from 'react-icons/fi';
 import { useRadioWs } from '@/hooks/homeaituber/use-radio-ws';
@@ -37,15 +37,71 @@ const MODES = [
   { id: 'idle', label: '⏸️ Idle' },
 ] as const;
 
-// ── Main ──
+const INTERVAL_PRESETS = [
+  { value: 60, label: '1m' },
+  { value: 300, label: '5m' },
+  { value: 600, label: '10m' },
+  { value: 1800, label: '30m' },
+] as const;
+
+const AGENT_TYPE_LABEL: Record<string, string> = {
+  main: '🎤',
+  guest: '🎙️',
+  director: '🎯',
+};
+
+// ── Topic input component ──
+
+function TopicInput({ onAdd }: { onAdd: (t: string) => void }) {
+  const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = useCallback(() => {
+    const trimmed = value.trim();
+    if (trimmed) {
+      onAdd(trimmed);
+      setValue('');
+      inputRef.current?.focus();
+    }
+  }, [value, onAdd]);
+
+  return (
+    <Flex gap="1" mt="1">
+      <Input
+        ref={inputRef}
+        size="xs"
+        placeholder="Add topic..."
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+        flex="1"
+        minW="0"
+      />
+      <Button
+        size="xs"
+        colorPalette="green"
+        variant="solid"
+        onClick={handleSubmit}
+        _active={btnActive}
+        disabled={!value.trim()}
+      >
+        +
+      </Button>
+    </Flex>
+  );
+}
+
+// ── Main panel ──
 
 function HomeAITuberPanel(): JSX.Element {
   const {
     connected, state,
     setMode, setLanguage, setMood, fireRadio,
+    setInterval, addTopic, removeTopic,
   } = useRadioWs('');
 
   const [localMood, setLocalMood] = useState('brisk');
+  const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(null);
   const { enabled: graphicsEnabled, toggle: toggleGraphics } = useGraphics();
 
   useEffect(() => {
@@ -61,20 +117,34 @@ function HomeAITuberPanel(): JSX.Element {
 
   const handleFire = useCallback(() => {
     setMood(localMood);
-    fireRadio(localMood);
-  }, [fireRadio, setMood, localMood]);
+    fireRadio(localMood, undefined, selectedSpeaker || undefined);
+  }, [fireRadio, setMood, localMood, selectedSpeaker]);
 
   const handleMoodChange = useCallback((id: string) => {
     setLocalMood(id);
     setMood(id);
   }, [setMood]);
 
+  const handleIntervalChange = useCallback((seconds: number) => {
+    setInterval(seconds);
+  }, [setInterval]);
+
+  const handleAddTopic = useCallback((topic: string) => {
+    addTopic(topic);
+  }, [addTopic]);
+
   const isStreaming = state.mode === 'streaming';
+
+  const isDirectorActive = state.agents.some(a => a.type === 'director');
+
+  // Agent list with visual grouping
+  const speakingAgents = state.agents.filter(a => a.type !== 'director');
+  const directorAgent = state.agents.find(a => a.type === 'director');
 
   return (
     <Box>
       {/* Status */}
-      <Flex align="center" gap="2" mb="3" px="1">
+      <Flex align="center" gap="2" mb="3" px="1" wrap="wrap">
         <Box
           w="8px" h="8px" borderRadius="full"
           bg={connected ? 'green.400' : 'red.400'}
@@ -86,6 +156,55 @@ function HomeAITuberPanel(): JSX.Element {
         {state.scheduler_running && (
           <Badge size="xs" variant="subtle" colorPalette="green">auto</Badge>
         )}
+        {isDirectorActive && (
+          <Badge size="xs" variant="subtle" colorPalette="purple">🎯 Director</Badge>
+        )}
+      </Flex>
+
+      {/* Interval preset */}
+      <Text fontSize="xs" color="whiteAlpha.500" mb="1" fontWeight="medium">⏱️ Tick interval</Text>
+      <Flex gap="1" mb="3" wrap="wrap">
+        {INTERVAL_PRESETS.map(p => (
+          <Button
+            key={p.value}
+            size="xs"
+            variant={state.interval === p.value ? 'solid' : 'outline'}
+            colorPalette={state.interval === p.value ? 'green' : 'gray'}
+            onClick={() => handleIntervalChange(p.value)}
+            flex="1"
+            minW="0"
+            _active={btnActive}
+          >
+            {p.label}
+          </Button>
+        ))}
+      </Flex>
+
+      {/* Agents */}
+      <Text fontSize="xs" color="whiteAlpha.500" mb="1" fontWeight="medium">👥 Agents</Text>
+      <Flex gap="1" mb="3" wrap="wrap">
+        {state.agents.map(a => {
+          const icon = AGENT_TYPE_LABEL[a.type] || '❓';
+          const isSelected = selectedSpeaker === a.name;
+          const color = a.type === 'main' ? 'green'
+            : a.type === 'director' ? 'purple'
+            : 'blue';
+          return (
+            <Button
+              key={a.name}
+              size="xs"
+              variant={isSelected ? 'solid' : 'outline'}
+              colorPalette={isSelected ? color : 'gray'}
+              onClick={() => setSelectedSpeaker(isSelected ? null : a.name)}
+              flex="1"
+              minW="0"
+              fontSize="11px"
+              _active={btnActive}
+            >
+              {icon} {a.name}
+            </Button>
+          );
+        })}
       </Flex>
 
       {/* Graphics toggle */}
@@ -171,15 +290,40 @@ function HomeAITuberPanel(): JSX.Element {
         onClick={handleFire}
         _active={{ transform: 'scale(0.96)' }}
       >
-        <FiRadio /> 📻 Fire now
+        <FiRadio /> {selectedSpeaker ? `🎤 ${selectedSpeaker}` : '📻'} Fire now
       </Button>
 
-      <Separator mb="3" borderColor="whiteAlpha.200" />
+      {/* Topic list */}
+      {state.topics.length > 0 && (
+        <>
+          <Text fontSize="xs" color="whiteAlpha.500" mb="1" fontWeight="medium">📋 Topics</Text>
+          <Flex gap="1" mb="2" wrap="wrap">
+            {state.topics.map(t => (
+              <Badge
+                key={t}
+                size="sm"
+                variant="subtle"
+                colorPalette="teal"
+                cursor="pointer"
+                onClick={() => removeTopic(t)}
+                title="Click to remove"
+                _hover={{ opacity: 0.7 }}
+              >
+                {t} ✕
+              </Badge>
+            ))}
+          </Flex>
+        </>
+      )}
+
+      <TopicInput onAdd={handleAddTopic} />
+
+      <Separator mb="3" mt="3" borderColor="whiteAlpha.200" />
 
       {/* Info */}
       <Text fontSize="xs" color="whiteAlpha.400" textAlign="center">
         {isStreaming
-          ? 'Auto-streaming active — Live2D works through main channel'
+          ? `Auto-streaming every ${state.interval}s ${isDirectorActive ? '🎯 Director active' : ''}`
           : 'Streaming paused — press ▶️ to resume'}
       </Text>
     </Box>

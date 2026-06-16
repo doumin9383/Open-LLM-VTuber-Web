@@ -6,19 +6,21 @@
  * channel — they come through the main /client-ws WebSocket via the
  * normal chat pipeline (process_single_conversation).
  *
- * Features: exponential backoff reconnect (1s→30s cap),
- *           visibilitychange reconnect, keepalive pings, singleton connection.
+ * v2: Added agents list, topic management, interval control.
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface RadioState {
-  mode: string;       // 'streaming' | 'idle'
-  language: string;   // 'en' | 'jp' | 'en-jp' | 'en-jp-note' | 'mixed'
+  mode: string;          // 'streaming' | 'idle'
+  language: string;      // 'en' | 'jp' | 'en-jp' | 'en-jp-note' | 'mixed'
   scheduler_running: boolean;
+  agents: Array<{ name: string; type: string }>;
+  topics: string[];
+  interval: number;
 }
 
-// ── Singleton: one control WebSocket, refs shared across all instances ──
+// ── Singleton ──
 
 let singletonWs: WebSocket | null = null;
 let singletonConnectCount = 0;
@@ -29,6 +31,9 @@ let singletonState: RadioState = {
   mode: 'streaming',
   language: 'en-jp',
   scheduler_running: false,
+  agents: [],
+  topics: [],
+  interval: 600,
 };
 let singletonListeners: Set<() => void> = new Set();
 let singletonPingTimer: ReturnType<typeof setInterval> | undefined;
@@ -72,6 +77,9 @@ function singletonConnect() {
             ...(msg.mode && { mode: msg.mode }),
             ...(msg.language && { language: msg.language }),
             ...(msg.scheduler_running !== undefined && { scheduler_running: msg.scheduler_running }),
+            ...(msg.agents && { agents: msg.agents }),
+            ...(msg.topics && { topics: msg.topics }),
+            ...(msg.interval && { interval: msg.interval }),
           };
           notifyListeners();
         } else if (msg.type === 'mode-changed') {
@@ -79,6 +87,15 @@ function singletonConnect() {
           notifyListeners();
         } else if (msg.type === 'language-changed') {
           singletonState = { ...singletonState, language: msg.language };
+          notifyListeners();
+        } else if (msg.type === 'interval-changed') {
+          singletonState = { ...singletonState, interval: msg.seconds };
+          notifyListeners();
+        } else if (msg.type === 'topic-changed') {
+          singletonState = { ...singletonState, topics: msg.topics };
+          notifyListeners();
+        } else if (msg.type === 'topic-list') {
+          singletonState = { ...singletonState, topics: msg.topics };
           notifyListeners();
         } else if (msg.type === 'mood-changed' || msg.type === 'request-ack' || msg.type === 'pong') {
           // acknowledged — no UI state to update
@@ -175,24 +192,50 @@ export function useRadioWs(_baseUrl: string) {
     singletonSend(cmd);
   }, []);
 
+  // ── Mode ──
   const setMode = useCallback((mode: string) => {
     singletonState = { ...singletonState, mode: mode as RadioState['mode'] };
     notifyListeners();
     singletonSend({ type: 'set-mode', mode });
   }, []);
 
+  // ── Language ──
   const setLanguage = useCallback((language: string) => {
     singletonState = { ...singletonState, language: language as RadioState['language'] };
     notifyListeners();
     singletonSend({ type: 'set-language', language });
   }, []);
 
+  // ── Mood ──
   const setMood = useCallback((mood: string) => {
     singletonSend({ type: 'set-mood', mood });
   }, []);
 
-  const fireRadio = useCallback((mood?: string) => {
-    singletonSend({ type: 'request-radio', mood: mood || null });
+  // ── Fire tick ──
+  const fireRadio = useCallback((mood?: string, topic?: string, speaker?: string) => {
+    const payload: Record<string, unknown> = { type: 'request-radio' };
+    if (mood) payload.mood = mood;
+    if (topic) payload.topic = topic;
+    if (speaker) payload.speaker = speaker;
+    singletonSend(payload);
+  }, []);
+
+  // ── Interval ──
+  const setInterval_ = useCallback((seconds: number) => {
+    singletonSend({ type: 'set-interval', seconds });
+  }, []);
+
+  // ── Topics ──
+  const addTopic = useCallback((topic: string) => {
+    singletonSend({ type: 'set-topic', topic, action: 'add' });
+  }, []);
+
+  const removeTopic = useCallback((topic: string) => {
+    singletonSend({ type: 'set-topic', topic, action: 'remove' });
+  }, []);
+
+  const listTopics = useCallback(() => {
+    singletonSend({ type: 'set-topic', action: 'list' });
   }, []);
 
   return {
@@ -203,5 +246,9 @@ export function useRadioWs(_baseUrl: string) {
     setMood,
     fireRadio,
     sendCommand,
+    setInterval: setInterval_,
+    addTopic,
+    removeTopic,
+    listTopics,
   };
 }
