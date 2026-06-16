@@ -99,9 +99,16 @@ function AppContent(): JSX.Element {
           {isElectron && <TitleBar />}
 
           {/* ═══════ DESKTOP LAYOUT (768px+) ═══════ */}
+          {/*
+           * zIndex: 6 — puts the entire Flex ABOVE the Live2D container (zIndex: 5)
+           * so footer/chat-input/sidebar/settings can receive clicks.
+           * mainContent has no background (transparent), so Live2D shows through.
+           */}
           <Flex
             {...layoutStyles.appContainer}
             display={{ base: 'none', md: 'flex' }}
+            position="relative"
+            zIndex={6}
           >
             <Box
               {...layoutStyles.sidebar}
@@ -141,6 +148,10 @@ function AppContent(): JSX.Element {
           </Flex>
 
           {/* ═══════ MOBILE LAYOUT (<768px) ═══════ */}
+          {/*
+           * zIndex: 6 — above Live2D (zIndex: 5) so interactive children
+           * (footer, subtitle, ws-status) with pointerEvents:auto receive clicks.
+           */}
           <Box
             display={{ base: 'block', md: 'none' }}
             position="absolute"
@@ -148,9 +159,9 @@ function AppContent(): JSX.Element {
             left={0}
             right={0}
             bottom={0}
-            zIndex={1}
+            zIndex={6}
             overflow="hidden"
-            pointerEvents="none"
+            pointerEvents="auto"
           >
             {/* Footer overlay at bottom */}
             <Box

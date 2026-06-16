@@ -261,6 +261,64 @@ export const useAudioTask = () => {
     audioTaskQueue.addTask(() => handleAudioPlayback(options));
   };
 
+  /**
+   * Expose globals for radio-mode lip sync and subtitles.
+   * Called from the singleton useRadioWs hook (non-React context).
+   */
+  useEffect(() => {
+    (window as any).setRadioSubtitle = (text: string) => {
+      setSubtitleText(text);
+    };
+
+    (window as any).startRadioLipSync = (audioBase64: string, mood?: string) => {
+      try {
+        const live2dManager = (window as any).getLive2DManager?.();
+        if (!live2dManager) {
+          console.warn('[Radio LipSync] Live2D manager not found');
+          return;
+        }
+        const model = live2dManager.getModel(0);
+        if (!model) {
+          console.warn('[Radio LipSync] Live2D model not found');
+          return;
+        }
+
+        // Start talk motion
+        if (typeof model.startRandomMotion === 'function' && LAppDefine?.PriorityNormal) {
+          model.startRandomMotion('Talk', LAppDefine.PriorityNormal);
+        }
+
+        // Feed WAV to wavFileHandler for Cubism lip sync (reads PCM RMS directly)
+        if (model._wavFileHandler) {
+          const audioDataUrl = `data:audio/wav;base64,${audioBase64}`;
+          console.log('[Radio LipSync] Starting wavFileHandler for radio audio');
+          model._wavFileHandler.start(audioDataUrl);
+        }
+
+        // Set mood-based expression
+        const lappAdapter = (window as any).getLAppAdapter?.();
+        if (lappAdapter && mood) {
+          const moodExpr: Record<string, number> = {
+            chaotic: 3,    // joy / smirk
+            chill: 0,      // neutral
+            brisk: 3,      // joy
+            thoughtful: 0, // neutral
+          };
+          const exprId = moodExpr[mood] ?? 0;
+          // Imported setExpression from useLive2DExpression
+          setExpression(exprId, lappAdapter, `Radio mood: ${mood}`);
+        }
+      } catch (e) {
+        console.warn('[Radio LipSync] Error:', e);
+      }
+    };
+
+    return () => {
+      delete (window as any).setRadioSubtitle;
+      delete (window as any).startRadioLipSync;
+    };
+  }, [setSubtitleText, setExpression]);
+
   return {
     addAudioTask,
     appendResponse,

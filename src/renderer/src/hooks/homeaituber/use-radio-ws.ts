@@ -42,6 +42,7 @@ let singletonState: RadioState = {
   language: 'en-jp',
   engine_running: false,
 };
+let singletonLastMood = '';
 let singletonListeners: Set<() => void> = new Set();
 let singletonPingTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -51,35 +52,47 @@ function notifyListeners() {
 }
 
 // Audio queue for sequential playback
-let audioQueue: string[] = [];
+interface AudioQueueEntry {
+  url: string;
+  base64: string;
+  mood?: string;
+}
+
+let audioQueue: AudioQueueEntry[] = [];
 let audioPlaying = false;
 
 function playNextInQueue() {
   if (audioPlaying || audioQueue.length === 0) return;
   audioPlaying = true;
-  const url = audioQueue.shift()!;
-  const audio = new Audio(url);
+  const entry = audioQueue.shift()!;
+  const audio = new Audio(entry.url);
+
+  // Start Live2D lip sync for radio audio
+  if ((window as any).startRadioLipSync) {
+    (window as any).startRadioLipSync(entry.base64, entry.mood);
+  }
+
   audio.play().catch(e => {
     console.warn('[HA Radio] Audio play failed:', e);
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(entry.url);
     audioPlaying = false;
     setTimeout(playNextInQueue, 200);
   });
   audio.onended = () => {
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(entry.url);
     audioPlaying = false;
     setTimeout(playNextInQueue, 200);
   };
 }
 
-function playAudio(base64Data: string) {
+function playAudio(base64Data: string, mood?: string) {
   try {
     const binaryStr = atob(base64Data);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
     const blob = new Blob([bytes], { type: 'audio/wav' });
     const url = URL.createObjectURL(blob);
-    audioQueue.push(url);
+    audioQueue.push({ url, base64: base64Data, mood });
     playNextInQueue();
   } catch (e) {
     console.warn('[HA Radio] Audio decode failed:', e);
@@ -120,6 +133,16 @@ function singletonConnect() {
         if (msg.type === 'radio-segment' && msg.segment) {
           singletonSegments = [msg.segment, ...singletonSegments].slice(0, 10);
           singletonGenerating = false;
+          // Update subtitle from radio segment
+          const segment = msg.segment as RadioSegment;
+          if ((window as any).setRadioSubtitle) {
+            const subtitleText = segment.jp || segment.en || segment.en_repeat || '';
+            if (subtitleText) {
+              (window as any).setRadioSubtitle(subtitleText);
+            }
+          }
+          // Store mood for upcoming audio messages
+          singletonLastMood = segment.mood || '';
           notifyListeners();
         } else if (msg.type === 'state-sync') {
           singletonState = {
@@ -136,8 +159,8 @@ function singletonConnect() {
           singletonState = { ...singletonState, language: msg.language };
           notifyListeners();
         } else if (msg.type === 'audio' && msg.audio) {
-          // Radio TTS audio playback
-          playAudio(msg.audio);
+          // Radio TTS audio playback with lip sync (mood from last segment)
+          playAudio(msg.audio, singletonLastMood);
         } else if (msg.type === 'pong') {
           // keepalive response received
         }
