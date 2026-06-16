@@ -32,12 +32,14 @@ import { ModeProvider, useMode } from "./context/mode-context";
 import { GraphicsProvider, useGraphics } from "./context/graphics-context";
 import MobileSidebarDrawer from "./components/mobile/MobileSidebarDrawer";
 import MobileFloatingControls from "./components/mobile/MobileFloatingControls";
+import MobileControlsDrawer from "./components/mobile/MobileControlsDrawer";
 import { StreamingStatusProvider } from "./components/homeaituber/RadioSegmentToast";
 
 function AppContent(): JSX.Element {
   const [showSidebar, setShowSidebar] = useState(true);
   const [isFooterCollapsed, setIsFooterCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const { mode } = useMode();
   const isElectron = window.api !== undefined;
   const live2dContainerRef = useRef<HTMLDivElement>(null);
@@ -205,14 +207,21 @@ function AppContent(): JSX.Element {
           {/* ═══════ MOBILE FLOATING CONTROLS (<768px) ═══════ */}
           <MobileFloatingControls
             onOpenChat={() => setMobileSidebarOpen(true)}
+            onOpenControls={() => setMobileControlsOpen(true)}
             micOn={false}
             onMicToggle={() => {}}
           />
 
-          {/* ═══════ MOBILE SIDEBAR DRAWER ═══════ */}
+          {/* ═══════ MOBILE SIDEBAR DRAWER (chat) ═══════ */}
           <MobileSidebarDrawer
             open={mobileSidebarOpen}
             onClose={() => setMobileSidebarOpen(false)}
+          />
+
+          {/* ═══════ MOBILE CONTROLS DRAWER (streaming) ═══════ */}
+          <MobileControlsDrawer
+            open={mobileControlsOpen}
+            onClose={() => setMobileControlsOpen(false)}
           />
 
           {/* Streaming status indicator */}

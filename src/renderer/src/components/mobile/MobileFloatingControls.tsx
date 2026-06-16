@@ -1,23 +1,27 @@
 /**
  * MobileFloatingControls — floating action buttons for mobile view.
  * Shown on small screens, hidden on desktop.
- * Provides: chat open, mic toggle, fire streaming, graphics toggle.
+ *
+ * v2: Separated chat open and controls open. Added controls toggle button.
  */
-import { Box, Button, Flex, IconButton } from '@chakra-ui/react';
+import { Box, IconButton } from '@chakra-ui/react';
 import { memo, useCallback } from 'react';
 import { BsMicFill, BsMicMuteFill } from 'react-icons/bs';
 import { FiRadio } from 'react-icons/fi';
+import { CgToolbox } from 'react-icons/cg';
 import { useGraphics } from '@/context/graphics-context';
 import { useRadioWs } from '@/hooks/homeaituber/use-radio-ws';
 
 interface MobileFloatingControlsProps {
   onOpenChat: () => void;
+  onOpenControls: () => void;
   micOn: boolean;
   onMicToggle: () => void;
 }
 
 function MobileFloatingControls({
   onOpenChat,
+  onOpenControls,
   micOn,
   onMicToggle,
 }: MobileFloatingControlsProps): JSX.Element {
@@ -64,6 +68,21 @@ function MobileFloatingControls({
         <FiRadio size="22" />
       </IconButton>
 
+      {/* Controls (interval, topics, mood, language) */}
+      <IconButton
+        aria-label="Streaming controls"
+        size="lg"
+        colorPalette="teal"
+        variant="solid"
+        borderRadius="full"
+        boxShadow="0 2px 12px rgba(0,0,0,0.3)"
+        w="52px" h="52px"
+        onClick={onOpenControls}
+        _active={{ transform: 'scale(0.88)', bg: 'teal.600' }}
+      >
+        <CgToolbox size="22" />
+      </IconButton>
+
       {/* Mic toggle */}
       <IconButton
         aria-label="Toggle Mic"
@@ -94,7 +113,7 @@ function MobileFloatingControls({
         </Box>
       </IconButton>
 
-      {/* Chat open */}
+      {/* Chat open (moved to bottom — most frequently used) */}
       <IconButton
         aria-label="Open Chat"
         size="lg"
