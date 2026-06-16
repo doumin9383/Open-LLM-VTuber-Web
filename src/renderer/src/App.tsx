@@ -206,8 +206,8 @@ function AppContent(): JSX.Element {
 
           {/* ═══════ MOBILE FLOATING CONTROLS (<768px) ═══════ */}
           <MobileFloatingControls
-            onOpenChat={() => setMobileSidebarOpen(true)}
-            onOpenControls={() => setMobileControlsOpen(true)}
+            onOpenChat={() => setMobileSidebarOpen(prev => !prev)}
+            onOpenControls={() => setMobileControlsOpen(prev => !prev)}
             micOn={false}
             onMicToggle={() => {}}
           />
