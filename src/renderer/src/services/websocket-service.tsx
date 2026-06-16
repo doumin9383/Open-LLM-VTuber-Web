@@ -144,6 +144,9 @@ class WebSocketService {
       this.disconnect();
     }
 
+    // Clear keepalive if any
+    this.clearKeepalive();
+
     try {
       this.ws = new WebSocket(url);
       this.currentState = 'CONNECTING';
@@ -153,11 +156,14 @@ class WebSocketService {
         this.currentState = 'OPEN';
         this.stateSubject.next('OPEN');
         this.initializeConnection();
+        this.startKeepalive();
       };
 
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          // Reset keepalive on any message from server
+          this.resetKeepaliveTimer();
           this.messageSubject.next(message);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
@@ -172,16 +178,57 @@ class WebSocketService {
       this.ws.onclose = () => {
         this.currentState = 'CLOSED';
         this.stateSubject.next('CLOSED');
+        this.clearKeepalive();
+        // Auto-reconnect after 3s
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
+          if (this.lastUrl) this.connect(this.lastUrl);
+        }, 3000);
       };
 
       this.ws.onerror = () => {
         this.currentState = 'CLOSED';
         this.stateSubject.next('CLOSED');
+        // Error will be followed by onclose, so reconnect is handled there
       };
+
+      this.lastUrl = url;
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error);
       this.currentState = 'CLOSED';
       this.stateSubject.next('CLOSED');
+    }
+  }
+
+  private lastUrl: string = '';
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private keepaliveTimer: ReturnType<typeof setInterval> | undefined;
+
+  private startKeepalive() {
+    this.clearKeepalive();
+    this.keepaliveTimer = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  }
+
+  private resetKeepaliveTimer() {
+    // Restart keepalive timer on any message activity
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = setInterval(() => {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000);
+    }
+  }
+
+  private clearKeepalive() {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = undefined;
     }
   }
 

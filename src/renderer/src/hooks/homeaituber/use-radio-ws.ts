@@ -1,8 +1,10 @@
 /**
  * Hook for HomeAITuber radio WebSocket connection.
  * Connects to /radio-ws endpoint and manages radio segment state.
- * Features: exponential backoff reconnect (1s→30s cap), visibilitychange reconnect.
+ * Features: exponential backoff reconnect (1s→30s cap), visibilitychange reconnect,
+ *           audio playback, keepalive pings, singleton connection.
  */
+
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface RadioSegment {
@@ -26,135 +28,248 @@ export interface RadioState {
   engine_running: boolean;
 }
 
-export function useRadioWs(baseUrl: string) {
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const backoffRef = useRef(1000);
-  const [connected, setConnected] = useState(false);
-  const [segments, setSegments] = useState<RadioSegment[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [state, setState] = useState<RadioState>({
-    mode: 'radio',
-    language: 'en-jp',
-    engine_running: false,
+// ── Singleton: one WebSocket, one audio element, refs shared across all instances ──
+
+let singletonWs: WebSocket | null = null;
+let singletonConnectCount = 0;
+let singletonReconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let singletonBackoff = 1000;
+let singletonConnected = false;
+let singletonGenerating = false;
+let singletonSegments: RadioSegment[] = [];
+let singletonState: RadioState = {
+  mode: 'radio',
+  language: 'en-jp',
+  engine_running: false,
+};
+let singletonListeners: Set<() => void> = new Set();
+let singletonPingTimer: ReturnType<typeof setInterval> | undefined;
+
+// Call all listeners to trigger React re-renders
+function notifyListeners() {
+  singletonListeners.forEach(fn => fn());
+}
+
+// Audio queue for sequential playback
+let audioQueue: string[] = [];
+let audioPlaying = false;
+
+function playNextInQueue() {
+  if (audioPlaying || audioQueue.length === 0) return;
+  audioPlaying = true;
+  const url = audioQueue.shift()!;
+  const audio = new Audio(url);
+  audio.play().catch(e => {
+    console.warn('[HA Radio] Audio play failed:', e);
+    URL.revokeObjectURL(url);
+    audioPlaying = false;
+    setTimeout(playNextInQueue, 200);
   });
+  audio.onended = () => {
+    URL.revokeObjectURL(url);
+    audioPlaying = false;
+    setTimeout(playNextInQueue, 200);
+  };
+}
 
-  const connect = useCallback(() => {
-    // Clear any pending reconnect
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = undefined;
+function playAudio(base64Data: string) {
+  try {
+    const binaryStr = atob(base64Data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    audioQueue.push(url);
+    playNextInQueue();
+  } catch (e) {
+    console.warn('[HA Radio] Audio decode failed:', e);
+  }
+}
+
+function singletonConnect() {
+  // Clear any pending reconnect
+  if (singletonReconnectTimer) {
+    clearTimeout(singletonReconnectTimer);
+    singletonReconnectTimer = undefined;
+  }
+
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${proto}//${window.location.host}/radio-ws`;
+
+  try {
+    const ws = new WebSocket(wsUrl);
+    singletonWs = ws;
+
+    ws.onopen = () => {
+      singletonConnected = true;
+      singletonBackoff = 1000;
+      notifyListeners();
+
+      // Start keepalive pings every 30s
+      if (singletonPingTimer) clearInterval(singletonPingTimer);
+      singletonPingTimer = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'radio-segment' && msg.segment) {
+          singletonSegments = [msg.segment, ...singletonSegments].slice(0, 10);
+          singletonGenerating = false;
+          notifyListeners();
+        } else if (msg.type === 'state-sync') {
+          singletonState = {
+            ...singletonState,
+            ...(msg.mode && { mode: msg.mode }),
+            ...(msg.language && { language: msg.language }),
+            ...(msg.engine_running !== undefined && { engine_running: msg.engine_running }),
+          };
+          notifyListeners();
+        } else if (msg.type === 'mode-changed') {
+          singletonState = { ...singletonState, mode: msg.mode };
+          notifyListeners();
+        } else if (msg.type === 'language-changed') {
+          singletonState = { ...singletonState, language: msg.language };
+          notifyListeners();
+        } else if (msg.type === 'audio' && msg.audio) {
+          // Radio TTS audio playback
+          playAudio(msg.audio);
+        } else if (msg.type === 'pong') {
+          // keepalive response received
+        }
+      } catch (_) { /* ignore parse errors */ }
+    };
+
+    ws.onclose = () => {
+      singletonConnected = false;
+      singletonWs = null;
+      if (singletonPingTimer) {
+        clearInterval(singletonPingTimer);
+        singletonPingTimer = undefined;
+      }
+      notifyListeners();
+
+      // Only reconnect if there are active subscribers
+      if (singletonListeners.size > 0) {
+        const delay = Math.min(singletonBackoff, 30000);
+        singletonBackoff = Math.min(singletonBackoff * 2, 30000);
+        singletonReconnectTimer = setTimeout(singletonConnect, delay);
+      }
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  } catch (_) {
+    if (singletonListeners.size > 0) {
+      const delay = Math.min(singletonBackoff, 30000);
+      singletonBackoff = Math.min(singletonBackoff * 2, 30000);
+      singletonReconnectTimer = setTimeout(singletonConnect, delay);
     }
+  }
+}
 
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${proto}//${window.location.host}/radio-ws`;
+function singletonDisconnect() {
+  singletonListeners.clear();
+  if (singletonPingTimer) {
+    clearInterval(singletonPingTimer);
+    singletonPingTimer = undefined;
+  }
+  if (singletonReconnectTimer) {
+    clearTimeout(singletonReconnectTimer);
+    singletonReconnectTimer = undefined;
+  }
+  if (singletonWs) {
+    singletonWs.close();
+    singletonWs = null;
+  }
+  singletonConnected = false;
+}
 
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+function singletonSend(cmd: Record<string, unknown>) {
+  if (singletonWs?.readyState === WebSocket.OPEN) {
+    singletonWs.send(JSON.stringify(cmd));
+  }
+}
 
-      ws.onopen = () => {
-        setConnected(true);
-        backoffRef.current = 1000; // Reset backoff on successful connect
-      };
+// ── React hook ──
 
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'radio-segment' && msg.segment) {
-            setSegments(prev => [msg.segment, ...prev].slice(0, 10));
-            setGenerating(false); // Clear generating on successful segment
-          } else if (msg.type === 'state-sync') {
-            setState(prev => ({
-              ...prev,
-              ...(msg.mode && { mode: msg.mode }),
-              ...(msg.language && { language: msg.language }),
-              ...(msg.engine_running !== undefined && { engine_running: msg.engine_running }),
-            }));
-          } else if (msg.type === 'mode-changed') {
-            setState(prev => ({ ...prev, mode: msg.mode }));
-          } else if (msg.type === 'language-changed') {
-            setState(prev => ({ ...prev, language: msg.language }));
-          } else if (msg.type === 'pong') {
-            // keepalive
-          }
-        } catch (_) { /* ignore parse errors */ }
-      };
+export function useRadioWs(_baseUrl: string) {
+  const [, forceUpdate] = useState(0);
+  const listenerRef = useRef<() => void>();
 
-      ws.onclose = () => {
-        setConnected(false);
-        const delay = Math.min(backoffRef.current, 30000);
-        backoffRef.current = Math.min(backoffRef.current * 2, 30000);
-        reconnectTimerRef.current = setTimeout(connect, delay);
-      };
-
-      ws.onerror = () => {
-        ws.close();
-      };
-    } catch (_) {
-      const delay = Math.min(backoffRef.current, 30000);
-      backoffRef.current = Math.min(backoffRef.current * 2, 30000);
-      reconnectTimerRef.current = setTimeout(connect, delay);
-    }
-  }, []);
-
+  // Subscribe/unsubscribe to singleton state changes
   useEffect(() => {
-    connect();
+    const listener = () => forceUpdate(n => n + 1);
+    listenerRef.current = listener;
+    singletonListeners.add(listener);
 
-    // visibilitychange: reconnect immediately when tab becomes visible
+    // First subscriber triggers connection
+    singletonConnectCount++;
+    if (!singletonWs) {
+      singletonConnect();
+    }
+
+    // Visibility change: reconnect immediately when tab becomes visible
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
-      const isStale = !wsRef.current
-        || wsRef.current.readyState === WebSocket.CLOSED
-        || wsRef.current.readyState === WebSocket.CLOSING;
+      const isStale = !singletonWs
+        || singletonWs.readyState === WebSocket.CLOSED
+        || singletonWs.readyState === WebSocket.CLOSING;
       if (isStale) {
-        backoffRef.current = 1000; // Reset backoff so reconnect is immediate
-        if (reconnectTimerRef.current) {
-          clearTimeout(reconnectTimerRef.current);
-        }
-        connect();
+        singletonBackoff = 1000;
+        singletonConnect();
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      clearTimeout(reconnectTimerRef.current);
-      wsRef.current?.close();
+      singletonListeners.delete(listener);
+      singletonConnectCount--;
+      if (singletonConnectCount <= 0) {
+        singletonDisconnect();
+      }
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [connect]);
+  }, []);
 
   const sendCommand = useCallback((cmd: Record<string, unknown>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(cmd));
-    }
+    singletonSend(cmd);
   }, []);
 
   const setMode = useCallback((mode: string) => {
-    // Optimistic update: show selected state immediately
-    setState(prev => ({ ...prev, mode: mode as RadioState['mode'] }));
-    sendCommand({ type: 'set-mode', mode });
-  }, [sendCommand]);
+    // Optimistic update
+    singletonState = { ...singletonState, mode: mode as RadioState['mode'] };
+    notifyListeners();
+    singletonSend({ type: 'set-mode', mode });
+  }, []);
 
   const setLanguage = useCallback((language: string) => {
-    // Optimistic update: show selected state immediately
-    setState(prev => ({ ...prev, language: language as RadioState['language'] }));
-    sendCommand({ type: 'set-language', language });
-  }, [sendCommand]);
+    // Optimistic update
+    singletonState = { ...singletonState, language: language as RadioState['language'] };
+    notifyListeners();
+    singletonSend({ type: 'set-language', language });
+  }, []);
 
   const fireRadio = useCallback((mood?: string) => {
-    // Set generating flag for UI feedback
-    setGenerating(true);
-    sendCommand({ type: 'request-radio', mood: mood || null });
-    // Auto-clear generating after 20s (safety net if no response)
-    setTimeout(() => setGenerating(false), 20000);
-  }, [sendCommand]);
+    singletonGenerating = true;
+    notifyListeners();
+    singletonSend({ type: 'request-radio', mood: mood || null });
+    setTimeout(() => {
+      singletonGenerating = false;
+      notifyListeners();
+    }, 20000);
+  }, []);
 
   return {
-    connected,
-    segments,
-    generating,
-    state,
+    connected: singletonConnected,
+    segments: singletonSegments,
+    generating: singletonGenerating,
+    state: singletonState,
     setMode,
     setLanguage,
     fireRadio,
