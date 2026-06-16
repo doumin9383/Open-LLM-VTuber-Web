@@ -1,6 +1,9 @@
 /**
  * HomeAITuber Control Panel
- * Integrated into the sidebar — mode, language, mood, fire, history.
+ * Integrated into the sidebar — streaming controls, mood, language, fire button.
+ *
+ * Audio/Live2D now go through the main /client-ws (normal chat pipeline),
+ * not through /radio-ws. This panel is purely a control interface.
  */
 import {
   Box, Button, Flex, Text, Badge, Separator,
@@ -9,16 +12,10 @@ import {
   memo, useCallback, useState, useEffect,
 } from 'react';
 import { FiRadio } from 'react-icons/fi';
-import { useRadioWs, RadioSegment } from '@/hooks/homeaituber/use-radio-ws';
+import { useRadioWs } from '@/hooks/homeaituber/use-radio-ws';
 import { useGraphics } from '@/context/graphics-context';
 
 const btnActive = { transform: 'scale(0.95)', transition: 'transform 0.08s' };
-
-const MODES = [
-  { id: 'chat', label: '💬 Chat' },
-  { id: 'radio', label: '📻 Radio' },
-  { id: 'radio-chat', label: '🎙️ Radio+Chat' },
-] as const;
 
 const LANGS = [
   { id: 'en', label: '🇬🇧 EN' },
@@ -29,69 +26,50 @@ const LANGS = [
 ] as const;
 
 const MOODS = [
-  { id: '', label: '🎭 auto' },
+  { id: 'brisk', label: '⚡ brisk' },
   { id: 'chaotic', label: '🤪 chaotic' },
   { id: 'chill', label: '😌 chill' },
-  { id: 'brisk', label: '⚡ brisk' },
   { id: 'thoughtful', label: '🤔 thoughtful' },
 ] as const;
 
-// ── Sub-components ──
-
-function SegmentItem({ segment }: { segment: RadioSegment }) {
-  const moodPalette = segment.mood === 'chaotic' ? 'red'
-    : segment.mood === 'chill' ? 'blue'
-      : segment.mood === 'brisk' ? 'green'
-        : 'yellow';
-  return (
-    <Box
-      p="6px 8px"
-      borderBottom="1px solid"
-      borderColor="whiteAlpha.100"
-      fontSize="xs"
-    >
-      <Flex justify="space-between" align="center" mb="1">
-        <Text color="green.300" fontWeight="medium" fontSize="11px" truncate maxW="75%">
-          {segment.en?.substring(0, 50)}{(segment.en?.length ?? 0) > 50 ? '…' : ''}
-        </Text>
-        <Badge size="xs" variant="subtle" colorPalette={moodPalette}>
-          {segment.mood || '?'}
-        </Badge>
-      </Flex>
-      <Text color="yellow.300" fontSize="10px">
-        {segment.jp?.substring(0, 60)}
-      </Text>
-    </Box>
-  );
-}
+const MODES = [
+  { id: 'streaming', label: '▶️ Streaming' },
+  { id: 'idle', label: '⏸️ Idle' },
+] as const;
 
 // ── Main ──
 
 function HomeAITuberPanel(): JSX.Element {
   const {
-    connected, segments, state,
-    setMode, setLanguage, fireRadio, generating,
+    connected, state,
+    setMode, setLanguage, setMood, fireRadio,
   } = useRadioWs('');
 
-  const [mood, setMoodState] = useState('');
+  const [localMood, setLocalMood] = useState('brisk');
   const { enabled: graphicsEnabled, toggle: toggleGraphics } = useGraphics();
 
-  // Persist
   useEffect(() => {
     localStorage.setItem('ha-mode', state.mode);
     localStorage.setItem('ha-language', state.language);
-    localStorage.setItem('ha-mood', mood);
-  }, [state.mode, state.language, mood]);
+    localStorage.setItem('ha-mood', localMood);
+  }, [state.mode, state.language, localMood]);
 
-  // Load saved mood
   useEffect(() => {
     const saved = localStorage.getItem('ha-mood');
-    if (saved !== null) setMoodState(saved);
+    if (saved !== null) setLocalMood(saved);
   }, []);
 
   const handleFire = useCallback(() => {
-    fireRadio(mood || undefined);
-  }, [fireRadio, mood]);
+    setMood(localMood);
+    fireRadio(localMood);
+  }, [fireRadio, setMood, localMood]);
+
+  const handleMoodChange = useCallback((id: string) => {
+    setLocalMood(id);
+    setMood(id);
+  }, [setMood]);
+
+  const isStreaming = state.mode === 'streaming';
 
   return (
     <Box>
@@ -103,8 +81,11 @@ function HomeAITuberPanel(): JSX.Element {
           boxShadow={connected ? '0 0 6px rgba(72,199,142,0.5)' : undefined}
         />
         <Text fontSize="xs" color="whiteAlpha.600">
-          {connected ? 'Radio connected' : 'Radio disconnected'}
+          {connected ? 'Streaming control connected' : 'Disconnected'}
         </Text>
+        {state.scheduler_running && (
+          <Badge size="xs" variant="subtle" colorPalette="green">auto</Badge>
+        )}
       </Flex>
 
       {/* Graphics toggle */}
@@ -121,7 +102,7 @@ function HomeAITuberPanel(): JSX.Element {
         </Button>
       </Flex>
 
-      {/* Mode */}
+      {/* Mode toggle */}
       <Text fontSize="xs" color="whiteAlpha.500" mb="1" fontWeight="medium">📋 Mode</Text>
       <Flex gap="1" mb="3" wrap="wrap">
         {MODES.map(m => (
@@ -167,9 +148,9 @@ function HomeAITuberPanel(): JSX.Element {
           <Button
             key={m.id}
             size="xs"
-            variant={mood === m.id ? 'solid' : 'outline'}
-            colorPalette={mood === m.id ? 'green' : 'gray'}
-            onClick={() => setMoodState(m.id)}
+            variant={localMood === m.id ? 'solid' : 'outline'}
+            colorPalette={localMood === m.id ? 'green' : 'gray'}
+            onClick={() => handleMoodChange(m.id)}
             flex="1"
             minW="0"
             fontSize="10px"
@@ -180,36 +161,27 @@ function HomeAITuberPanel(): JSX.Element {
         ))}
       </Flex>
 
-      {/* Fire */}
+      {/* Fire now */}
       <Button
         size="sm"
-        colorPalette={generating ? 'yellow' : 'pink'}
+        colorPalette="pink"
         variant="solid"
         width="100%"
         mb="3"
         onClick={handleFire}
-        loading={generating}
-        loadingText="Generating..."
         _active={{ transform: 'scale(0.96)' }}
       >
-        <FiRadio /> 📻 Fire Radio
+        <FiRadio /> 📻 Fire now
       </Button>
 
       <Separator mb="3" borderColor="whiteAlpha.200" />
 
-      {/* Recent */}
-      <Text fontSize="xs" color="whiteAlpha.500" mb="2" fontWeight="medium">📜 Recent Radio</Text>
-      <Box maxH="200px" overflowY="auto" borderRadius="md" bg="whiteAlpha.50">
-        {segments.length === 0 ? (
-          <Text fontSize="xs" color="whiteAlpha.400" p="3" textAlign="center">
-            No segments yet — press 📻
-          </Text>
-        ) : (
-          segments.map(seg => (
-            <SegmentItem key={seg.segment_id} segment={seg} />
-          ))
-        )}
-      </Box>
+      {/* Info */}
+      <Text fontSize="xs" color="whiteAlpha.400" textAlign="center">
+        {isStreaming
+          ? 'Auto-streaming active — Live2D works through main channel'
+          : 'Streaming paused — press ▶️ to resume'}
+      </Text>
     </Box>
   );
 }
