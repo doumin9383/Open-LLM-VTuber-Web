@@ -22,7 +22,7 @@ function MobileFloatingControls({
   onMicToggle,
 }: MobileFloatingControlsProps): JSX.Element {
   const { enabled: graphicsEnabled, toggle: toggleGraphics } = useGraphics();
-  const { fireRadio } = useRadioWs('');
+  const { fireRadio, generating } = useRadioWs('');
 
   const handleFire = useCallback(() => {
     fireRadio();
@@ -37,17 +37,30 @@ function MobileFloatingControls({
       display={{ base: 'flex', md: 'none' }}
       flexDirection="column"
       gap="10px"
+      css={{
+        '& button:active': {
+          transform: 'scale(0.88)',
+          opacity: '0.8',
+          transition: 'transform 0.08s, opacity 0.08s',
+        },
+        '& button': {
+          transition: 'transform 0.15s, opacity 0.15s',
+          WebkitTapHighlightColor: 'transparent',
+        },
+      }}
     >
       {/* Radio fire */}
       <IconButton
         aria-label="Fire Radio"
         size="lg"
-        colorPalette="pink"
+        colorPalette={generating ? 'yellow' : 'pink'}
         variant="solid"
         borderRadius="full"
         boxShadow="0 2px 12px rgba(0,0,0,0.3)"
         w="52px" h="52px"
         onClick={handleFire}
+        loading={generating}
+        _active={{ transform: 'scale(0.88)', bg: 'pink.600' }}
       >
         <FiRadio size="22" />
       </IconButton>

@@ -32,6 +32,7 @@ export function useRadioWs(baseUrl: string) {
   const backoffRef = useRef(1000);
   const [connected, setConnected] = useState(false);
   const [segments, setSegments] = useState<RadioSegment[]>([]);
+  const [generating, setGenerating] = useState(false);
   const [state, setState] = useState<RadioState>({
     mode: 'radio',
     language: 'en-jp',
@@ -62,6 +63,7 @@ export function useRadioWs(baseUrl: string) {
           const msg = JSON.parse(event.data);
           if (msg.type === 'radio-segment' && msg.segment) {
             setSegments(prev => [msg.segment, ...prev].slice(0, 10));
+            setGenerating(false); // Clear generating on successful segment
           } else if (msg.type === 'state-sync') {
             setState(prev => ({
               ...prev,
@@ -129,20 +131,29 @@ export function useRadioWs(baseUrl: string) {
   }, []);
 
   const setMode = useCallback((mode: string) => {
+    // Optimistic update: show selected state immediately
+    setState(prev => ({ ...prev, mode: mode as RadioState['mode'] }));
     sendCommand({ type: 'set-mode', mode });
   }, [sendCommand]);
 
   const setLanguage = useCallback((language: string) => {
+    // Optimistic update: show selected state immediately
+    setState(prev => ({ ...prev, language: language as RadioState['language'] }));
     sendCommand({ type: 'set-language', language });
   }, [sendCommand]);
 
   const fireRadio = useCallback((mood?: string) => {
+    // Set generating flag for UI feedback
+    setGenerating(true);
     sendCommand({ type: 'request-radio', mood: mood || null });
+    // Auto-clear generating after 20s (safety net if no response)
+    setTimeout(() => setGenerating(false), 20000);
   }, [sendCommand]);
 
   return {
     connected,
     segments,
+    generating,
     state,
     setMode,
     setLanguage,

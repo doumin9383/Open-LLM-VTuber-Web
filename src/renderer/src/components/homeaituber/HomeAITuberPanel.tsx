@@ -12,6 +12,8 @@ import { FiRadio } from 'react-icons/fi';
 import { useRadioWs, RadioSegment } from '@/hooks/homeaituber/use-radio-ws';
 import { useGraphics } from '@/context/graphics-context';
 
+const btnActive = { transform: 'scale(0.95)', transition: 'transform 0.08s' };
+
 const MODES = [
   { id: 'chat', label: '💬 Chat' },
   { id: 'radio', label: '📻 Radio' },
@@ -68,7 +70,7 @@ function SegmentItem({ segment }: { segment: RadioSegment }) {
 function HomeAITuberPanel(): JSX.Element {
   const {
     connected, segments, state,
-    setMode, setLanguage, fireRadio,
+    setMode, setLanguage, fireRadio, generating,
   } = useRadioWs('');
 
   const [mood, setMoodState] = useState('');
@@ -113,6 +115,7 @@ function HomeAITuberPanel(): JSX.Element {
           variant={graphicsEnabled ? 'solid' : 'outline'}
           colorPalette={graphicsEnabled ? 'green' : 'gray'}
           onClick={toggleGraphics}
+          _active={btnActive}
         >
           {graphicsEnabled ? 'ON' : 'OFF'}
         </Button>
@@ -130,6 +133,7 @@ function HomeAITuberPanel(): JSX.Element {
             onClick={() => setMode(m.id)}
             flex="1"
             minW="0"
+            _active={btnActive}
           >
             {m.label}
           </Button>
@@ -149,6 +153,7 @@ function HomeAITuberPanel(): JSX.Element {
             flex="1"
             minW="0"
             fontSize="11px"
+            _active={btnActive}
           >
             {l.label}
           </Button>
@@ -168,6 +173,7 @@ function HomeAITuberPanel(): JSX.Element {
             flex="1"
             minW="0"
             fontSize="10px"
+            _active={btnActive}
           >
             {m.label}
           </Button>
@@ -177,11 +183,14 @@ function HomeAITuberPanel(): JSX.Element {
       {/* Fire */}
       <Button
         size="sm"
-        colorPalette="pink"
+        colorPalette={generating ? 'yellow' : 'pink'}
         variant="solid"
         width="100%"
         mb="3"
         onClick={handleFire}
+        loading={generating}
+        loadingText="Generating..."
+        _active={{ transform: 'scale(0.96)' }}
       >
         <FiRadio /> 📻 Fire Radio
       </Button>
