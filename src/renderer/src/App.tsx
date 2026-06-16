@@ -1,7 +1,7 @@
 /* eslint-disable no-shadow */
 // import { StrictMode } from 'react';
 import { Box, Flex, ChakraProvider, defaultSystem } from "@chakra-ui/react";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 // import Canvas from './components/canvas/canvas'; // Likely unused now
 import Sidebar from "./components/sidebar/sidebar";
 import Footer from "./components/footer/footer";
@@ -30,7 +30,6 @@ import WebSocketStatus from './components/canvas/ws-status';
 import Subtitle from "./components/canvas/subtitle";
 import { ModeProvider, useMode } from "./context/mode-context";
 import { GraphicsProvider, useGraphics } from "./context/graphics-context";
-import { useIsMobile } from "./hooks/utils/use-is-mobile";
 import MobileSidebarDrawer from "./components/mobile/MobileSidebarDrawer";
 import MobileFloatingControls from "./components/mobile/MobileFloatingControls";
 import { RadioSegmentToastProvider } from "./components/homeaituber/RadioSegmentToast";
@@ -43,23 +42,16 @@ function AppContent(): JSX.Element {
   const isElectron = window.api !== undefined;
   const live2dContainerRef = useRef<HTMLDivElement>(null);
   const { enabled: graphicsEnabled } = useGraphics();
-  const isMobile = useIsMobile();
 
-    
+  // CSS-based overflow: hidden (avoid JS position:fixed which breaks mobile viewport)
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
-  document.documentElement.style.height = '100%';
-  document.body.style.height = '100%';
-  document.documentElement.style.position = 'fixed';
-  document.body.style.position = 'fixed';
-  document.documentElement.style.width = '100%';
-  document.body.style.width = '100%';
 
   // Define base style properties shared across modes/breakpoints
   const live2dBaseStyle = {
     position: "absolute" as const,
     overflow: "hidden",
-    transition: "all 0.3s ease-in-out", // Optional transition
+    transition: "all 0.3s ease-in-out",
     pointerEvents: "auto" as const,
     visibility: graphicsEnabled ? ("visible" as const) : ("hidden" as const),
   };
@@ -69,33 +61,31 @@ function AppContent(): JSX.Element {
     ...live2dBaseStyle,
     top: isElectron ? "30px" : "0px",
     height: `calc(100% - ${isElectron ? "30px" : "0px"})`,
-    zIndex: 5, // Ensure it's layered correctly below UI but above background
+    zIndex: 5,
     left: {
-      base: "0px", // Column layout (base): Start from left edge
-      md: sidebarVisible ? "440px" : "24px", // Row layout (md+): Offset by sidebar width
+      base: "0px",
+      md: sidebarVisible ? "440px" : "24px",
     },
     width: {
-      base: "100%", // Column layout (base): Full width
-      md: `calc(100% - ${sidebarVisible ? "440px" : "24px"})`, // Row layout (md+): Adjust width based on sidebar
+      base: "100%",
+      md: `calc(100% - ${sidebarVisible ? "440px" : "24px"})`,
     },
   });
 
   // Define styles specifically for the "pet" mode
   const live2dPetStyle = {
     ...live2dBaseStyle,
-    top: 0, // Override position for pet mode
+    top: 0,
     left: 0,
-    width: "100vw", // Full viewport
+    width: "100vw",
     height: "100vh",
-    zIndex: 15, // Higher zIndex for pet mode overlay
+    zIndex: 15,
   };
 
   return (
     <>
       <Box
         ref={live2dContainerRef}
-        // Apply styles conditionally based on mode
-        // Use the function to get dynamic responsive styles for window mode
         {...(mode === "window"
           ? getResponsiveLive2DWindowStyle(showSidebar)
           : live2dPetStyle)}
@@ -106,117 +96,115 @@ function AppContent(): JSX.Element {
       {/* Conditional Rendering of Window UI */}
       {mode === "window" && (
         <>
-          {isElectron && !isMobile && <TitleBar />}
-          
-          {/* Desktop: inline sidebar + mainContent layout */}
-          {!isMobile && (
-            <Flex {...layoutStyles.appContainer}>
-              <Box
-                {...layoutStyles.sidebar}
-                {...(!showSidebar && { width: "24px" })}
-              >
-                <Sidebar
-                  isCollapsed={!showSidebar}
-                  onToggle={() => setShowSidebar(!showSidebar)}
-                />
-              </Box>
-              <Box {...layoutStyles.mainContent}>
-                <Background />
-                <Box position="absolute" top="20px" left="20px" zIndex={10}>
-                  <WebSocketStatus />
-                </Box>
-                <Box
-                  position="absolute"
-                  bottom={isFooterCollapsed ? "39px" : "135px"}
-                  left="50%"
-                  transform="translateX(-50%)"
-                  zIndex={10}
-                  width="60%"
-                >
-                  <Subtitle />
-                </Box>
-                <Box
-                  {...layoutStyles.footer}
-                  zIndex={10}
-                  {...(isFooterCollapsed && layoutStyles.collapsedFooter)}
-                >
-                  <Footer
-                    isCollapsed={isFooterCollapsed}
-                    onToggle={() => setIsFooterCollapsed(!isFooterCollapsed)}
-                  />
-                </Box>
-              </Box>
-            </Flex>
-          )}
+          {isElectron && <TitleBar />}
 
-          {/* Mobile: overlay footer + floating controls + Drawer sidebar */}
-          {isMobile && (
-            <>
-              {/* Subtle overlay background */}
+          {/* ═══════ DESKTOP LAYOUT (768px+) ═══════ */}
+          <Flex
+            {...layoutStyles.appContainer}
+            display={{ base: 'none', md: 'flex' }}
+          >
+            <Box
+              {...layoutStyles.sidebar}
+              {...(!showSidebar && { width: "24px" })}
+            >
+              <Sidebar
+                isCollapsed={!showSidebar}
+                onToggle={() => setShowSidebar(!showSidebar)}
+              />
+            </Box>
+            <Box {...layoutStyles.mainContent}>
+              <Background />
+              <Box position="absolute" top="20px" left="20px" zIndex={10}>
+                <WebSocketStatus />
+              </Box>
               <Box
                 position="absolute"
-                top={0}
-                left={0}
-                right={0}
-                bottom={0}
-                zIndex={1}
-                pointerEvents="none"
+                bottom={isFooterCollapsed ? "39px" : "135px"}
+                left="50%"
+                transform="translateX(-50%)"
+                zIndex={10}
+                width="60%"
               >
-                {/* Footer at bottom as overlay */}
-                <Box
-                  position="absolute"
-                  bottom={0}
-                  left={0}
-                  right={0}
-                  zIndex={10}
-                  pointerEvents="auto"
-                >
-                  <Box
-                    {...layoutStyles.footer}
-                    {...(isFooterCollapsed && layoutStyles.collapsedFooter)}
-                  >
-                    <Footer
-                      isCollapsed={isFooterCollapsed}
-                      onToggle={() => setIsFooterCollapsed(!isFooterCollapsed)}
-                    />
-                  </Box>
-                </Box>
-
-                {/* WebSocket status indicator */}
-                <Box position="absolute" top="20px" left="20px" zIndex={10} pointerEvents="auto">
-                  <WebSocketStatus />
-                </Box>
-
-                {/* Subtitle */}
-                <Box
-                  position="absolute"
-                  bottom={isFooterCollapsed ? "125px" : "175px"}
-                  left="50%"
-                  transform="translateX(-50%)"
-                  zIndex={10}
-                  width="80%"
-                  pointerEvents="auto"
-                >
-                  <Subtitle />
-                </Box>
+                <Subtitle />
               </Box>
+              <Box
+                {...layoutStyles.footer}
+                zIndex={10}
+                {...(isFooterCollapsed && layoutStyles.collapsedFooter)}
+              >
+                <Footer
+                  isCollapsed={isFooterCollapsed}
+                  onToggle={() => setIsFooterCollapsed(!isFooterCollapsed)}
+                />
+              </Box>
+            </Box>
+          </Flex>
 
-              {/* Floating action buttons */}
-              <MobileFloatingControls
-                onOpenChat={() => setMobileSidebarOpen(true)}
-                micOn={false}
-                onMicToggle={() => {}}
-              />
+          {/* ═══════ MOBILE LAYOUT (<768px) ═══════ */}
+          <Box
+            display={{ base: 'block', md: 'none' }}
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            zIndex={1}
+            overflow="hidden"
+            pointerEvents="none"
+          >
+            {/* Footer overlay at bottom */}
+            <Box
+              position="absolute"
+              bottom={0}
+              left={0}
+              right={0}
+              zIndex={10}
+              pointerEvents="auto"
+            >
+              <Box
+                {...layoutStyles.footer}
+                {...(isFooterCollapsed && layoutStyles.collapsedFooter)}
+              >
+                <Footer
+                  isCollapsed={isFooterCollapsed}
+                  onToggle={() => setIsFooterCollapsed(!isFooterCollapsed)}
+                />
+              </Box>
+            </Box>
 
-              {/* Mobile sidebar as Drawer */}
-              <MobileSidebarDrawer
-                open={mobileSidebarOpen}
-                onClose={() => setMobileSidebarOpen(false)}
-              />
-            </>
-          )}
+            {/* WebSocket status indicator */}
+            <Box position="absolute" top="20px" left="20px" zIndex={10} pointerEvents="auto">
+              <WebSocketStatus />
+            </Box>
 
-          {/* Radio segment overlay notification (desktop only) */}
+            {/* Subtitle */}
+            <Box
+              position="absolute"
+              bottom={isFooterCollapsed ? "125px" : "175px"}
+              left="50%"
+              transform="translateX(-50%)"
+              zIndex={10}
+              width="80%"
+              pointerEvents="auto"
+            >
+              <Subtitle />
+            </Box>
+          </Box>
+
+          {/* ═══════ MOBILE FLOATING CONTROLS (<768px) ═══════ */}
+          <MobileFloatingControls
+            onOpenChat={() => setMobileSidebarOpen(true)}
+            micOn={false}
+            onMicToggle={() => {}}
+          />
+
+          {/* ═══════ MOBILE SIDEBAR DRAWER ═══════ */}
+          <MobileSidebarDrawer
+            open={mobileSidebarOpen}
+            onClose={() => setMobileSidebarOpen(false)}
+          />
+
+          {/* Radio segment overlay notification */}
           <RadioSegmentToastProvider />
         </>
       )}
@@ -230,7 +218,6 @@ function AppContent(): JSX.Element {
 function App(): JSX.Element {
   return (
     <ChakraProvider value={defaultSystem}>
-      {/* ModeProvider needs to wrap AppContent to provide mode to getGlobalStyles */}
       <ModeProvider>
         <AppWithGlobalStyles />
       </ModeProvider>
@@ -238,7 +225,6 @@ function App(): JSX.Element {
   );
 }
 
-// New component to access mode for global styles
 function AppWithGlobalStyles(): JSX.Element {
   return (
     <>
