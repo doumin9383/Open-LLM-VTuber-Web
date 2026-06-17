@@ -2,11 +2,11 @@
  * HomeAITuber Control Panel
  * Integrated into the sidebar — multi-agent streaming controls.
  *
- * v2: Added topic list management, interval slider, agent status.
+ * v3: Interval slider (0=continuous mode), continuous_mode state.
  */
 
 import {
-  Box, Button, Flex, Text, Badge, Separator, Input, Select, createListCollection,
+  Box, Button, Flex, Text, Badge, Separator, Input, Slider,
 } from '@chakra-ui/react';
 import {
   memo, useCallback, useState, useEffect, useRef,
@@ -35,13 +35,6 @@ const MOODS = [
 const MODES = [
   { id: 'streaming', label: '▶️ Streaming' },
   { id: 'idle', label: '⏸️ Idle' },
-] as const;
-
-const INTERVAL_PRESETS = [
-  { value: 60, label: '1m' },
-  { value: 300, label: '5m' },
-  { value: 600, label: '10m' },
-  { value: 1800, label: '30m' },
 ] as const;
 
 const AGENT_TYPE_LABEL: Record<string, string> = {
@@ -104,6 +97,8 @@ function HomeAITuberPanel(): JSX.Element {
   const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(null);
   const { enabled: graphicsEnabled, toggle: toggleGraphics } = useGraphics();
 
+  const isContinuous = state.continuous_mode || state.interval === 0;
+
   useEffect(() => {
     localStorage.setItem('ha-mode', state.mode);
     localStorage.setItem('ha-language', state.language);
@@ -129,11 +124,16 @@ function HomeAITuberPanel(): JSX.Element {
     setInterval(seconds);
   }, [setInterval]);
 
+  const handleSliderChange = useCallback((e: { value: number[] }) => {
+    setInterval(e.value[0]);
+  }, [setInterval]);
+
   const handleAddTopic = useCallback((topic: string) => {
     addTopic(topic);
   }, [addTopic]);
 
-  const isStreaming = state.mode === 'streaming';
+  const isStreaming = state.mode === 'streaming' || state.mode === 'continuous';
+  const isAnyRunning = state.scheduler_running && isStreaming;
 
   const isDirectorActive = state.agents.some(a => a.type === 'director');
 
@@ -156,29 +156,40 @@ function HomeAITuberPanel(): JSX.Element {
         {state.scheduler_running && (
           <Badge size="xs" variant="subtle" colorPalette="green">auto</Badge>
         )}
+        {isContinuous && (
+          <Badge size="xs" variant="subtle" colorPalette="orange">∞ Continuous</Badge>
+        )}
         {isDirectorActive && (
           <Badge size="xs" variant="subtle" colorPalette="purple">🎯 Director</Badge>
         )}
       </Flex>
 
-      {/* Interval preset */}
-      <Text fontSize="xs" color="whiteAlpha.500" mb="1" fontWeight="medium">⏱️ Tick interval</Text>
-      <Flex gap="1" mb="3" wrap="wrap">
-        {INTERVAL_PRESETS.map(p => (
-          <Button
-            key={p.value}
-            size="xs"
-            variant={state.interval === p.value ? 'solid' : 'outline'}
-            colorPalette={state.interval === p.value ? 'green' : 'gray'}
-            onClick={() => handleIntervalChange(p.value)}
-            flex="1"
-            minW="0"
-            _active={btnActive}
-          >
-            {p.label}
-          </Button>
-        ))}
-      </Flex>
+      {/* Interval slider */}
+      <Text fontSize="xs" color="whiteAlpha.500" mb="1" fontWeight="medium">
+        ⏱️ {isContinuous ? 'Continuous (output-end → next)' : `Tick interval: ${state.interval}s`}
+      </Text>
+      <Slider.Root
+        min={0}
+        max={1800}
+        step={30}
+        value={[state.interval]}
+        onValueChange={handleSliderChange}
+        mb="3"
+      >
+        <Slider.Control>
+          <Slider.Track>
+            <Slider.FilledTrack />
+          </Slider.Track>
+          <Slider.Thumb />
+        </Slider.Control>
+        <Slider.MarkerGroup>
+          <Slider.Marker value={0}><Text fontSize="2xs" color="orange.300">∞</Text></Slider.Marker>
+          <Slider.Marker value={60}><Text fontSize="2xs" color="whiteAlpha.400">1m</Text></Slider.Marker>
+          <Slider.Marker value={300}><Text fontSize="2xs" color="whiteAlpha.400">5m</Text></Slider.Marker>
+          <Slider.Marker value={600}><Text fontSize="2xs" color="whiteAlpha.400">10m</Text></Slider.Marker>
+          <Slider.Marker value={1800}><Text fontSize="2xs" color="whiteAlpha.400">30m</Text></Slider.Marker>
+        </Slider.MarkerGroup>
+      </Slider.Root>
 
       {/* Agents */}
       <Text fontSize="xs" color="whiteAlpha.500" mb="1" fontWeight="medium">👥 Agents</Text>
@@ -228,8 +239,8 @@ function HomeAITuberPanel(): JSX.Element {
           <Button
             key={m.id}
             size="xs"
-            variant={state.mode === m.id ? 'solid' : 'outline'}
-            colorPalette={state.mode === m.id ? 'green' : 'gray'}
+            variant={(state.mode === m.id || (isContinuous && m.id === 'streaming')) ? 'solid' : 'outline'}
+            colorPalette={(state.mode === m.id || (isContinuous && m.id === 'streaming')) ? 'green' : 'gray'}
             onClick={() => setMode(m.id)}
             flex="1"
             minW="0"
@@ -322,8 +333,10 @@ function HomeAITuberPanel(): JSX.Element {
 
       {/* Info */}
       <Text fontSize="xs" color="whiteAlpha.400" textAlign="center">
-        {isStreaming
-          ? `Auto-streaming every ${state.interval}s ${isDirectorActive ? '🎯 Director active' : ''}`
+        {isAnyRunning
+          ? isContinuous
+            ? `Continuous streaming${isDirectorActive ? ' 🎯 Director active' : ''}`
+            : `Auto-streaming every ${state.interval}s${isDirectorActive ? ' 🎯 Director active' : ''}`
           : 'Streaming paused — press ▶️ to resume'}
       </Text>
     </Box>

@@ -12,12 +12,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface RadioState {
-  mode: string;          // 'streaming' | 'idle'
+  mode: string;          // 'streaming' | 'idle' | 'continuous'
   language: string;      // 'en' | 'jp' | 'en-jp' | 'en-jp-note' | 'mixed'
   scheduler_running: boolean;
   agents: Array<{ name: string; type: string }>;
   topics: string[];
   interval: number;
+  continuous_mode: boolean;
 }
 
 // ── Singleton ──
@@ -34,6 +35,7 @@ let singletonState: RadioState = {
   agents: [],
   topics: [],
   interval: 600,
+  continuous_mode: false,
 };
 let singletonListeners: Set<() => void> = new Set();
 let singletonPingTimer: ReturnType<typeof setInterval> | undefined;
@@ -79,7 +81,8 @@ function singletonConnect() {
             ...(msg.scheduler_running !== undefined && { scheduler_running: msg.scheduler_running }),
             ...(msg.agents && { agents: msg.agents }),
             ...(msg.topics && { topics: msg.topics }),
-            ...(msg.interval && { interval: msg.interval }),
+            ...(msg.interval !== undefined && { interval: msg.interval }),
+            ...(msg.continuous_mode !== undefined && { continuous_mode: msg.continuous_mode }),
           };
           notifyListeners();
         } else if (msg.type === 'mode-changed') {
@@ -89,7 +92,11 @@ function singletonConnect() {
           singletonState = { ...singletonState, language: msg.language };
           notifyListeners();
         } else if (msg.type === 'interval-changed') {
-          singletonState = { ...singletonState, interval: msg.seconds };
+          singletonState = {
+            ...singletonState,
+            interval: msg.seconds,
+            continuous_mode: !!msg.continuous,
+          };
           notifyListeners();
         } else if (msg.type === 'topic-changed') {
           singletonState = { ...singletonState, topics: msg.topics };
