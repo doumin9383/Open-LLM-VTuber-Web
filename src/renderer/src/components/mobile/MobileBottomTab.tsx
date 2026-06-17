@@ -17,6 +17,7 @@ import { BsMicFill, BsMicMuteFill } from 'react-icons/bs';
 import { FiSettings } from 'react-icons/fi';
 import { CgToolbox } from 'react-icons/cg';
 import { useGraphics } from '@/context/graphics-context';
+import { useUiMode } from '@/context/ui-mode-context';
 
 export type TabId = 'chat' | 'controls' | 'settings';
 
@@ -61,6 +62,8 @@ function MobileBottomTab({
   onMicToggle,
 }: MobileBottomTabProps): JSX.Element {
   const { enabled: graphicsEnabled, toggle: toggleGraphics } = useGraphics();
+  const { effectiveMode } = useUiMode();
+  const isMobile = effectiveMode === 'mobile';
 
   return (
     <Flex
@@ -72,7 +75,7 @@ function MobileBottomTab({
       bg="gray.900"
       borderTop="1px solid"
       borderColor="whiteAlpha.200"
-      display={{ base: 'flex', md: 'none' }}
+      display={isMobile ? 'flex' : 'none'}
       height="56px"
       align="center"
       justify="space-around"

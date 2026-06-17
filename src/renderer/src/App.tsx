@@ -35,6 +35,7 @@ import MobileControlsDrawer from "./components/mobile/MobileControlsDrawer";
 import MobileSettingsDrawer from "./components/mobile/MobileSettingsDrawer";
 import MobileBottomTab, { type TabId } from "./components/mobile/MobileBottomTab";
 import { StreamingStatusProvider } from "./components/homeaituber/RadioSegmentToast";
+import { UiModeProvider, useUiMode } from "./context/ui-mode-context";
 
 function AppContent(): JSX.Element {
   const [showSidebar, setShowSidebar] = useState(true);
@@ -44,6 +45,8 @@ function AppContent(): JSX.Element {
   const isElectron = window.api !== undefined;
   const live2dContainerRef = useRef<HTMLDivElement>(null);
   const { enabled: graphicsEnabled } = useGraphics();
+  const { effectiveMode } = useUiMode();
+  const isMobile = effectiveMode === 'mobile';
 
   // Derive drawer open states from activeTab
   const mobileSidebarOpen = activeTab === 'chat';
@@ -117,7 +120,7 @@ function AppContent(): JSX.Element {
           {/* zIndex: 6 — above Live2D (zIndex: 5) so controls are clickable */}
           <Flex
             {...layoutStyles.appContainer}
-            display={{ base: 'none', md: 'flex' }}
+            display={isMobile ? 'none' : 'flex'}
             position="relative"
             zIndex={6}
           >
@@ -161,7 +164,7 @@ function AppContent(): JSX.Element {
           {/* ═══════ MOBILE LAYOUT (<768px) ═══════ */}
           {/* zIndex: 6 — above Live2D (zIndex: 5) so controls are clickable */}
           <Box
-            display={{ base: 'block', md: 'none' }}
+            display={isMobile ? 'block' : 'none'}
             position="absolute"
             top={0}
             left={0}
@@ -252,9 +255,11 @@ function AppContent(): JSX.Element {
 function App(): JSX.Element {
   return (
     <ChakraProvider value={defaultSystem}>
-      <ModeProvider>
+      <UiModeProvider>
+        <ModeProvider>
         <AppWithGlobalStyles />
       </ModeProvider>
+      </UiModeProvider>
     </ChakraProvider>
   );
 }

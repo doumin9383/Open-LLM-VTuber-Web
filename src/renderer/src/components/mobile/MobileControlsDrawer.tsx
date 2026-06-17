@@ -12,6 +12,7 @@ import {
   DrawerBackdrop,
 } from '@/components/ui/drawer';
 import HomeAITuberPanel from '../homeaituber/HomeAITuberPanel';
+import UiModeToggle from './UiModeToggle';
 
 interface MobileControlsDrawerProps {
   open: boolean;
@@ -39,6 +40,7 @@ function MobileControlsDrawer({ open, onClose }: MobileControlsDrawerProps): JSX
         </DrawerHeader>
         <DrawerBody overflowY="auto" px="3" pb="6">
           <HomeAITuberPanel />
+          <UiModeToggle />
         </DrawerBody>
       </DrawerContent>
     </DrawerRoot>
