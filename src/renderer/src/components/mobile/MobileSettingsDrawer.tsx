@@ -1,29 +1,28 @@
-/* eslint-disable import/no-extraneous-dependencies */
+/**
+ * MobileSettingsDrawer — renders settings as a bottom Drawer on mobile.
+ * Triggered by the Settings tab in MobileBottomTab.
+ * Shares SettingsTabsPanel content with the desktop SettingUI (left drawer).
+ */
+import { useState, useCallback } from 'react';
+import { Button } from '@chakra-ui/react';
+import { useTranslation } from 'react-i18next';
 import {
-  Button,
   DrawerRoot,
   DrawerContent,
   DrawerHeader,
-  DrawerTitle,
   DrawerBody,
   DrawerFooter,
-  DrawerBackdrop,
   DrawerCloseTrigger,
-} from '@chakra-ui/react';
-import { useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { CloseButton } from '@/components/ui/close-button';
+  DrawerBackdrop,
+} from '@/components/ui/drawer';
+import SettingsTabsPanel from '../sidebar/setting/SettingsTabsPanel';
 
-import { settingStyles } from './setting-styles';
-import SettingsTabsPanel from './SettingsTabsPanel';
-
-interface SettingUIProps {
+interface MobileSettingsDrawerProps {
   open: boolean;
   onClose: () => void;
-  onToggle: () => void;
 }
 
-function SettingUI({ open, onClose }: SettingUIProps): JSX.Element {
+function MobileSettingsDrawer({ open, onClose }: MobileSettingsDrawerProps): JSX.Element {
   const { t } = useTranslation();
   const [saveHandlers, setSaveHandlers] = useState<(() => void)[]>([]);
   const [cancelHandlers, setCancelHandlers] = useState<(() => void)[]>([]);
@@ -55,26 +54,24 @@ function SettingUI({ open, onClose }: SettingUIProps): JSX.Element {
   return (
     <DrawerRoot
       open={open}
-      onOpenChange={(e) => (e.open ? null : onClose())}
-      placement="start"
+      onOpenChange={(e: { open: boolean }) => { if (!e.open) onClose(); }}
+      placement="bottom"
+      size="full"
     >
       <DrawerBackdrop />
-      <DrawerContent {...settingStyles.settingUI.drawerContent}>
-        <DrawerHeader {...settingStyles.settingUI.drawerHeader}>
-          <DrawerTitle {...settingStyles.settingUI.drawerTitle}>
-            {t('common.settings')}
-          </DrawerTitle>
-          <div {...settingStyles.settingUI.closeButton}>
-            <DrawerCloseTrigger asChild onClick={handleCancel}>
-              <CloseButton size="sm" color="white" />
-            </DrawerCloseTrigger>
-          </div>
+      <DrawerContent
+        css={{
+          maxH: '85dvh',
+          borderTopRadius: 'xl',
+          bg: 'gray.900',
+        }}
+      >
+        <DrawerHeader pt="3" pb="0">
+          <DrawerCloseTrigger />
         </DrawerHeader>
-
-        <DrawerBody>
+        <DrawerBody overflowY="auto" px="0" pb="2">
           <SettingsTabsPanel onSave={handleSaveCallback} onCancel={handleCancelCallback} />
         </DrawerBody>
-
         <DrawerFooter>
           <Button colorPalette="red" onClick={handleCancel}>
             {t('common.cancel')}
@@ -88,4 +85,4 @@ function SettingUI({ open, onClose }: SettingUIProps): JSX.Element {
   );
 }
 
-export default SettingUI;
+export default MobileSettingsDrawer;

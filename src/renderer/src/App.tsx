@@ -31,19 +31,32 @@ import Subtitle from "./components/canvas/subtitle";
 import { ModeProvider, useMode } from "./context/mode-context";
 import { GraphicsProvider, useGraphics } from "./context/graphics-context";
 import MobileSidebarDrawer from "./components/mobile/MobileSidebarDrawer";
-import MobileFloatingControls from "./components/mobile/MobileFloatingControls";
 import MobileControlsDrawer from "./components/mobile/MobileControlsDrawer";
+import MobileSettingsDrawer from "./components/mobile/MobileSettingsDrawer";
+import MobileBottomTab, { type TabId } from "./components/mobile/MobileBottomTab";
 import { StreamingStatusProvider } from "./components/homeaituber/RadioSegmentToast";
 
 function AppContent(): JSX.Element {
   const [showSidebar, setShowSidebar] = useState(true);
   const [isFooterCollapsed, setIsFooterCollapsed] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId | null>(null);
   const { mode } = useMode();
   const isElectron = window.api !== undefined;
   const live2dContainerRef = useRef<HTMLDivElement>(null);
   const { enabled: graphicsEnabled } = useGraphics();
+
+  // Derive drawer open states from activeTab
+  const mobileSidebarOpen = activeTab === 'chat';
+  const mobileControlsOpen = activeTab === 'controls';
+  const mobileSettingsOpen = activeTab === 'settings';
+
+  const handleTabChange = (tab: TabId) => {
+    setActiveTab((prev) => (prev === tab ? null : tab));
+  };
+
+  const handleDrawerClose = () => {
+    setActiveTab(null);
+  };
 
   // CSS-based overflow: hidden (avoid JS position:fixed which breaks mobile viewport)
   document.documentElement.style.overflow = 'hidden';
@@ -101,11 +114,7 @@ function AppContent(): JSX.Element {
           {isElectron && <TitleBar />}
 
           {/* ═══════ DESKTOP LAYOUT (768px+) ═══════ */}
-          {/*
-           * zIndex: 6 — puts the entire Flex ABOVE the Live2D container (zIndex: 5)
-           * so footer/chat-input/sidebar/settings can receive clicks.
-           * mainContent has no background (transparent), so Live2D shows through.
-           */}
+          {/* zIndex: 6 — above Live2D (zIndex: 5) so controls are clickable */}
           <Flex
             {...layoutStyles.appContainer}
             display={{ base: 'none', md: 'flex' }}
@@ -150,10 +159,7 @@ function AppContent(): JSX.Element {
           </Flex>
 
           {/* ═══════ MOBILE LAYOUT (<768px) ═══════ */}
-          {/*
-           * zIndex: 6 — above Live2D (zIndex: 5) so interactive children
-           * (footer, subtitle, ws-status) with pointerEvents:auto receive clicks.
-           */}
+          {/* zIndex: 6 — above Live2D (zIndex: 5) so controls are clickable */}
           <Box
             display={{ base: 'block', md: 'none' }}
             position="absolute"
@@ -165,10 +171,10 @@ function AppContent(): JSX.Element {
             overflow="hidden"
             pointerEvents="auto"
           >
-            {/* Footer overlay at bottom */}
+            {/* Footer overlay — sits above the 56px bottom tab bar */}
             <Box
               position="absolute"
-              bottom={0}
+              bottom="56px"
               left={0}
               right={0}
               zIndex={10}
@@ -204,24 +210,32 @@ function AppContent(): JSX.Element {
             </Box>
           </Box>
 
-          {/* ═══════ MOBILE FLOATING CONTROLS (<768px) ═══════ */}
-          <MobileFloatingControls
-            onOpenChat={() => setMobileSidebarOpen(prev => !prev)}
-            onOpenControls={() => setMobileControlsOpen(prev => !prev)}
+          {/* ═══════ MOBILE BOTTOM TAB BAR (<768px) ═══════ */}
+          {/* Replaces the old FAB stack with a proper bottom navigation */}
+          <MobileBottomTab
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
             micOn={false}
             onMicToggle={() => {}}
           />
 
-          {/* ═══════ MOBILE SIDEBAR DRAWER (chat) ═══════ */}
+          {/* ═══════ MOBILE DRAWERS (<768px) ═══════ */}
+          {/* Chat drawer */}
           <MobileSidebarDrawer
             open={mobileSidebarOpen}
-            onClose={() => setMobileSidebarOpen(false)}
+            onClose={handleDrawerClose}
           />
 
-          {/* ═══════ MOBILE CONTROLS DRAWER (streaming) ═══════ */}
+          {/* Controls drawer */}
           <MobileControlsDrawer
             open={mobileControlsOpen}
-            onClose={() => setMobileControlsOpen(false)}
+            onClose={handleDrawerClose}
+          />
+
+          {/* Settings drawer (bottom, tabs + save/cancel) */}
+          <MobileSettingsDrawer
+            open={mobileSettingsOpen}
+            onClose={handleDrawerClose}
           />
 
           {/* Streaming status indicator */}
