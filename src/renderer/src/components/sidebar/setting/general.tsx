@@ -1,6 +1,6 @@
 /* eslint-disable import/no-extraneous-dependencies */
 import { useTranslation } from "react-i18next";
-import { Stack, createListCollection } from "@chakra-ui/react";
+import { Stack, createListCollection, Separator } from "@chakra-ui/react";
 import { useBgUrl } from "@/context/bgurl-context";
 import { settingStyles } from "./setting-styles";
 import { useConfig } from "@/context/character-config-context";
@@ -79,6 +79,25 @@ function General({ onSave, onCancel }: GeneralProps): JSX.Element {
 
   return (
     <Stack {...settingStyles.common.container}>
+      {/* ═══ Connection (Save to apply) ═══ */}
+      <InputField
+        label={t("settings.general.wsUrl")}
+        value={settings.wsUrl}
+        onChange={(value) => handleSettingChange("wsUrl", value)}
+        placeholder="Enter WebSocket URL"
+        help={t("settings.general.saveToApply") || "Save to apply"}
+      />
+
+      <InputField
+        label={t("settings.general.baseUrl")}
+        value={settings.baseUrl}
+        onChange={(value) => handleSettingChange("baseUrl", value)}
+        placeholder="Enter Base URL"
+        help={t("settings.general.saveToApply") || "Save to apply"}
+      />
+
+      <Separator borderColor="whiteAlpha.200" my="2" />
+
       <SelectField
         label={t("settings.general.language")}
         value={settings.language}
@@ -124,20 +143,6 @@ function General({ onSave, onCancel }: GeneralProps): JSX.Element {
         onChange={handleCharacterPresetChange}
         collection={collections.characterPresets}
         placeholder={confName || t("settings.general.characterPreset")}
-      />
-
-      <InputField
-        label={t("settings.general.wsUrl")}
-        value={settings.wsUrl}
-        onChange={(value) => handleSettingChange("wsUrl", value)}
-        placeholder="Enter WebSocket URL"
-      />
-
-      <InputField
-        label={t("settings.general.baseUrl")}
-        value={settings.baseUrl}
-        onChange={(value) => handleSettingChange("baseUrl", value)}
-        placeholder="Enter Base URL"
       />
 
       <InputField

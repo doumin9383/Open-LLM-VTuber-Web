@@ -121,16 +121,13 @@ export const useGeneralSettings = ({
       bgUrlContext.setBackgroundUrl(fullUrl);
     }
 
-    onWsUrlChange(settings.wsUrl);
-    onBaseUrlChange(settings.baseUrl);
-
     // Apply language change if it differs from current language
     if (settings.language && settings.language[0] && settings.language[0] !== i18n.language) {
       i18n.changeLanguage(settings.language[0]);
     }
     localStorage.setItem(IMAGE_COMPRESSION_QUALITY_KEY, settings.imageCompressionQuality.toString());
     localStorage.setItem(IMAGE_MAX_WIDTH_KEY, settings.imageMaxWidth.toString());
-  }, [settings, bgUrlContext, baseUrl, onWsUrlChange, onBaseUrlChange, setShowSubtitle]);
+  }, [settings, bgUrlContext, baseUrl, setShowSubtitle]);
 
   useEffect(() => {
     if (confName) {
@@ -170,12 +167,6 @@ export const useGeneralSettings = ({
   ): void => {
     setSettings((prev) => ({ ...prev, [key]: value }));
 
-    if (key === 'wsUrl') {
-      onWsUrlChange(value as string);
-    }
-    if (key === 'baseUrl') {
-      onBaseUrlChange(value as string);
-    }
     // Immediately change language when it's updated
     if (key === 'language' && Array.isArray(value) && value.length > 0) {
       i18n.changeLanguage(value[0]);
@@ -183,6 +174,8 @@ export const useGeneralSettings = ({
   };
 
   const handleSave = (): void => {
+    onWsUrlChange(settings.wsUrl);
+    onBaseUrlChange(settings.baseUrl);
     setOriginalSettings(settings);
   };
 

@@ -7,7 +7,6 @@
  * Settings → MobileSettingsDrawer.
  */
 import { memo } from 'react';
-import { Separator } from '@chakra-ui/react';
 import {
   DrawerRoot,
   DrawerContent,
@@ -18,7 +17,6 @@ import {
 } from '@/components/ui/drawer';
 import ChatHistoryPanel from '../sidebar/chat-history-panel';
 import BottomTab from '../sidebar/bottom-tab';
-import HomeAITuberPanel from '../homeaituber/HomeAITuberPanel';
 
 interface MobileSidebarDrawerProps {
   open: boolean;
@@ -46,9 +44,6 @@ function MobileSidebarDrawer({ open, onClose }: MobileSidebarDrawerProps): JSX.E
         </DrawerHeader>
         <DrawerBody overflowY="auto" px="3" pb="4">
           <ChatHistoryPanel />
-          <Separator borderColor="whiteAlpha.200" mt="3" mb="3" />
-          <HomeAITuberPanel />
-          <Separator borderColor="whiteAlpha.200" mt="3" mb="3" />
           <BottomTab />
         </DrawerBody>
       </DrawerContent>
