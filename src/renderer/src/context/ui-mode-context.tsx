@@ -7,7 +7,7 @@
  *
  * Stored in localStorage under `ui-mode`.
  */
-import {
+import React, {
   createContext, useContext, useState, useMemo, useCallback, useEffect,
 } from 'react';
 
